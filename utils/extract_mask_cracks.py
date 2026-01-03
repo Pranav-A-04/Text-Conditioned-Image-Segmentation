@@ -1,10 +1,17 @@
 import cv2
 import os
 import numpy as np
+import argparse
 
-IMAGE_DIR = "/content/cracks-2/train/images"
-LABEL_DIR = "/content/cracks-2/train/labels"
-MASK_DIR  = "/content/cracks-2/train/masks"
+args = argparse.ArgumentParser()
+args.add_argument('--image_dir', type=str, help='Directory containing input images')
+args.add_argument('--label_dir', type=str, help='Directory containing label files')
+args.add_argument('--mask_dir', type=str, help='Directory to save output masks')
+opts = args.parse_args()
+
+IMAGE_DIR = opts.image_dir
+LABEL_DIR = opts.label_dir
+MASK_DIR  = opts.mask_dir
 
 os.makedirs(MASK_DIR, exist_ok=True)
 
