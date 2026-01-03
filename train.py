@@ -90,6 +90,8 @@ def train(model, dataloader, optimizer):
         # Obtain visual and text embeddings from pre-trained models
         with torch.no_grad():
             vis_emb = vit(images)
+            assert vis_emb.ndim == 3, f"Expected [B, N, D], got {vis_emb.shape}"
+
             text_tokens = clip.tokenize(prompts).to(args.device)
             text_emb = clip_model.encode_text(text_tokens)
 
@@ -113,6 +115,7 @@ def validate(model, dataloader):
             prompts = batch['prompt']
 
             vis_emb = vit(images)
+            assert vis_emb.ndim == 3, f"Expected [B, N, D], got {vis_emb.shape}"
             text_tokens = clip.tokenize(prompts).to(args.device)
             text_emb = clip_model.encode_text(text_tokens)
 
