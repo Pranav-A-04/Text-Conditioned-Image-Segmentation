@@ -1,0 +1,141 @@
+import os
+import numpy as np
+import torch
+import timm
+import clip
+from torch.utils.data import DataLoader
+from data.dataloader import CracksAndDrywallDataloader
+from model.segmentation_decoder import SegmentationDecoder
+from utils.prompts import PROMPTS
+import argparse
+
+parser = argparse.ArgumentParser(description="Train Text-Conditioned Image Segmentation Model")
+
+parser.add_argument('--batch_size', type=int, default=32, help='Batch size for training')
+parser.add_argument('--num_workers', type=int, default=2, help='Number of workers for data loading')
+parser.add_argument('--num_epochs', type=int, default=100, help='Number of training epochs')
+parser.add_argument('--device', type=str, default='cuda', help='Device to use for training (cuda or cpu)')
+parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
+parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate for optimizer')
+parser.add_argument('--save_interval', type=int, default=10, help='Interval (in epochs) to save model checkpoints')
+args = parser.parse_args()
+
+torch.manual_seed(args.seed)
+
+train_dataset = CracksAndDrywallDataloader(
+    cracks_path="/content/cracks-2/train",
+    drywall_path="/content/Drywall-Join-Detect-3/train",
+    prompts=PROMPTS
+)
+
+val_dataset = CracksAndDrywallDataloader(
+    cracks_path="/content/cracks-2/val",
+    drywall_path="/content/Drywall-Join-Detect-3/val",
+    prompts=PROMPTS
+)
+
+train_loader = DataLoader(
+    train_dataset,
+    args.batch_size,
+    shuffle=True,
+    num_workers=args.num_workers,
+)
+
+val_loader = DataLoader(
+    val_dataset,
+    args.batch_size,
+    shuffle=False,
+    num_workers=args.num_workers,
+)
+
+# Fetch pre-trained ViT and CLIP models
+vit = timm.create_model(
+    'vit_base_patch16_224',
+    pretrained=True,
+)
+# Remove classification head
+vit.reset_classifier(0)
+vit = vit.to(args.device)
+vit.eval()
+
+# Load CLIP model
+clip_model, preprocess = clip.load('ViT-B/32', device=args.device)
+clip_model.eval()
+
+# Freeze pre-trained model parameters
+for p in vit.parameters():
+    p.requires_grad = False
+
+for p in clip_model.parameters():
+    p.requires_grad = False
+
+# Initialize segmentation decoder
+decoder = SegmentationDecoder(
+    vis_token_dim=768,
+    text_token_dim=512,
+    input_dim=512,
+    output_dim=1
+).to(args.device)
+
+# Define optimizer
+optimizer = torch.optim.AdamW(decoder.parameters(), lr=1e-4)
+
+def train(model, dataloader, optimizer):
+    losses = []
+    for batch in dataloader:
+        images = batch['image'].to(args.device)
+        masks = batch['mask'].to(args.device)
+        prompts = batch['prompt']
+
+        # Obtain visual and text embeddings from pre-trained models
+        with torch.no_grad():
+            vis_emb = vit(images)
+            text_tokens = clip.tokenize(prompts).to(args.device)
+            text_emb = clip_model.encode_text(text_tokens)
+
+        optimizer.zero_grad()
+        pred_masks = model(vis_emb, text_emb)
+
+        loss = model.get_loss(pred_masks, masks)
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.item())
+    avg_loss = np.mean(losses)
+    return avg_loss
+    
+
+def validate(model, dataloader):
+    val_losses = []
+    with torch.no_grad():
+        for batch in dataloader:
+            images = batch['image'].to(args.device)
+            masks = batch['mask'].to(args.device)
+            prompts = batch['prompt']
+
+            vis_emb = vit(images)
+            text_tokens = clip.tokenize(prompts).to(args.device)
+            text_emb = clip_model.encode_text(text_tokens)
+
+            pred_masks = model(vis_emb, text_emb)
+
+            loss = model.get_loss(pred_masks, masks)
+            val_losses.append(loss.item())
+    avg_loss = np.mean(val_losses)
+    return avg_loss
+
+
+if __name__ == "__main__":
+    
+    # train model
+    for epoch in range(args.num_epochs):
+        decoder.train()
+        loss = train(decoder, train_loader, optimizer)
+        print(f"Epoch {epoch+1}/{args.num_epochs} | Training Loss: {loss}")
+        
+        # validate model and save ckpt
+        if epoch % int(args.save_interval) == 0:
+            decoder.eval()
+            val_loss = validate(decoder, val_loader)
+            print(f"Epoch {epoch+1}/{args.num_epochs} | Validation Loss: {val_loss}")
+            os.makedirs("checkpoints", exist_ok=True)
+            torch.save(decoder.state_dict(), os.path.join("checkpoints", f"segmentation_decoder_epoch_{epoch+1}.pth"))    

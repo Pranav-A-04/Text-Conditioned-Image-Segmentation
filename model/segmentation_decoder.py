@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+from utils.misc import dice_loss
 
 class SegmentationDecoder(nn.Module):
     def __init__(self, vis_token_dim, text_token_dim, input_dim, output_dim=1, hidden_dim=[256, 128, 64, 32]):
@@ -22,10 +22,17 @@ class SegmentationDecoder(nn.Module):
         )
         
         self.activation = nn.Sigmoid()
-
+    
+    def get_loss(self, predicted_mask, ground_truth_mask):
+        BCELoss = nn.BCELoss()
+        bce_loss = BCELoss(predicted_mask, ground_truth_mask)
+        dice_loss = dice_loss(predicted_mask, ground_truth_mask)
+        
+        return bce_loss + dice_loss
+    
     def forward(self, vis_tokens, text_tokens):
         # broadcast text tokens
-        text_tokens = text_tokens.unsqueeze(1)
+        text_tokens = text_tokens.unsqueeze(1).repeat(1, vis_tokens.size(1), 1)
         
         # Project visual and text tokens
         vis_tokens = self.vis_proj_layer(vis_tokens)
