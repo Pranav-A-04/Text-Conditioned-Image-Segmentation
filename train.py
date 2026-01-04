@@ -96,6 +96,7 @@ def train(model, dataloader, optimizer):
 
             text_tokens = clip.tokenize(prompts).to(args.device)
             text_emb = clip_model.encode_text(text_tokens)
+            text_emb = text_emb.float()
 
         optimizer.zero_grad()
         pred_masks = model(vis_emb, text_emb)
@@ -120,6 +121,7 @@ def validate(model, dataloader):
             assert vis_emb.ndim == 3, f"Expected [B, N, D], got {vis_emb.shape}"
             text_tokens = clip.tokenize(prompts).to(args.device)
             text_emb = clip_model.encode_text(text_tokens)
+            text_emb = text_emb.float()
 
             pred_masks = model(vis_emb, text_emb)
 
