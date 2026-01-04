@@ -4,6 +4,7 @@ import torch
 import timm
 import clip
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 from data.dataloader import CracksAndDrywallDataloader
 from model.segmentation_decoder import SegmentationDecoder
 from utils.prompts import PROMPTS
@@ -136,7 +137,7 @@ def validate(model, dataloader):
 if __name__ == "__main__":
     
     # train model
-    for epoch in range(args.num_epochs):
+    for epoch in tqdm(range(args.num_epochs)):
         decoder.train()
         loss = train(decoder, train_loader, optimizer)
         print(f"Epoch {epoch+1}/{args.num_epochs} | Training Loss: {loss}")
