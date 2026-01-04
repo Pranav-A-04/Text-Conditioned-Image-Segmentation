@@ -1,76 +1,91 @@
 import os
 import random
-import cv2
 import torch
 from torch.utils.data import Dataset
+from PIL import Image
+from torchvision import transforms
+
 class CracksAndDrywallDataloader(Dataset):
-    def __init__(self, cracks_path, drywall_path, prompts):
+    def __init__(self, cracks_path, drywall_path, prompts, img_size=224):
         super().__init__()
         self.cracks = cracks_path
         self.drywall = drywall_path
         self.prompts = prompts
+        self.img_size = img_size
         self.dataset = self.load_data()
+
+        # ImageNet normalization for timm ViT
+        self.image_transform = transforms.Compose([
+            transforms.Resize((img_size, img_size)),
+            transforms.ToTensor(),  # converts to [3,H,W] in [0,1]
+            transforms.Normalize(
+                mean=(0.485, 0.456, 0.406),
+                std=(0.229, 0.224, 0.225)
+            )
+        ])
+
+        self.mask_transform = transforms.Compose([
+            transforms.Resize((img_size, img_size), interpolation=Image.NEAREST),
+            transforms.ToTensor()  # [1,H,W] in [0,1]
+        ])
 
     def load_data(self):
         dataset = []
-        
-        # Load cracks data
-        for img_name in os.listdir(os.path.join(self.cracks, "images")):
-            if not img_name.endswith((".jpg", ".png")):
-                continue
 
-            img_path = os.path.join(self.cracks, "images", img_name)
-            mask_path = os.path.join(
-                self.cracks, "masks", img_name.rsplit(".", 1)[0] + ".png"
-            )
+        def load_folder(root):
+            samples = []
+            for img_name in os.listdir(os.path.join(root, "images")):
+                if not img_name.lower().endswith((".jpg", ".png")):
+                    continue
 
-            image = cv2.imread(img_path)
-            mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+                img_path = os.path.join(root, "images", img_name)
+                mask_path = os.path.join(
+                    root, "masks", img_name.rsplit(".", 1)[0] + ".png"
+                )
 
-            if random.random() < 0.5:
-                prompt = random.choice(self.prompts["crack"])
-            else:
-                prompt = random.choice(self.prompts["taping"])
-            dataset.append({
-                'image': image,
-                'mask': mask,
-                'prompt': prompt
-            })
-        # Load drywall data
-        for img_name in os.listdir(os.path.join(self.drywall, "images")):
-            if not img_name.endswith((".jpg", ".png")):
-                continue
+                if not os.path.exists(mask_path):
+                    continue
 
-            img_path = os.path.join(self.drywall, "images", img_name)
-            mask_path = os.path.join(
-                self.drywall, "masks", img_name.rsplit(".", 1)[0] + ".png"
-            )
+                samples.append((img_path, mask_path))
+            return samples
 
-            image = cv2.imread(img_path)
-            mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        for img_path, mask_path in load_folder(self.cracks):
+            dataset.append((img_path, mask_path, "crack"))
 
-            if random.random() < 0.5:
-                prompt = random.choice(self.prompts["crack"])
-            else:
-                prompt = random.choice(self.prompts["taping"])
-            dataset.append({
-                'image': image,
-                'mask': mask,
-                'prompt': prompt
-            })
-        
+        for img_path, mask_path in load_folder(self.drywall):
+            dataset.append((img_path, mask_path, "taping"))
+
         return dataset
-    
+
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, idx):
-        data = self.dataset[idx]
-        image = data['image']
-        mask = data['mask']
-        prompt = data['prompt']
+        img_path, mask_path, gt_class = self.dataset[idx]
+
+        # load image
+        image = Image.open(img_path).convert("RGB")
+        image = self.image_transform(image)   # [3,224,224]
+
+        # load mask
+        mask = Image.open(mask_path).convert("L")
+        mask = self.mask_transform(mask)      # [1,224,224]
+        mask = (mask > 0.5).float()            # binarize to {0,1}
+
+        # sample prompt
+        if gt_class == "crack":
+            if random.random() < 0.5:
+                prompt = random.choice(self.prompts["crack"])
+            else:
+                prompt = random.choice(self.prompts["taping"])
+        else:
+            if random.random() < 0.5:
+                prompt = random.choice(self.prompts["taping"])
+            else:
+                prompt = random.choice(self.prompts["crack"])
+
         return {
-            'image': torch.tensor(image, dtype=torch.float32),
-            'mask': torch.tensor(mask, dtype=torch.float32),
-            'prompt': prompt
+            "image": image,   # [3,224,224]
+            "mask": mask,     # [1,224,224]
+            "prompt": prompt
         }
