@@ -64,8 +64,14 @@ image = image_transform(orig_image).unsqueeze(0).to(device)  # [1,3,224,224]
 
 
 with torch.no_grad():
-    text_tokens = clip.tokenize([args.prompt]).to(device)
-    text_emb = clip_model.encode_text(text_tokens).float()  # [1,512]
+    text_tokens = clip.tokenize([args.prompt]).to(args.device)
+    # Use CLIP token-level transformer outputs so attention has multiple keys
+    token_emb = clip_model.token_embedding(text_tokens).type(clip_model.dtype)  # [B, L, D]
+    x = token_emb + clip_model.positional_embedding.type(clip_model.dtype)
+    x = x.permute(1, 0, 2)  # [L, B, D]
+    x = clip_model.transformer(x)
+    x = x.permute(1, 0, 2)  # [B, L, D]
+    text_emb = clip_model.ln_final(x).float()
 
 with torch.no_grad():
     vis_tokens = vit.forward_features(image)   # [1,197,768]
