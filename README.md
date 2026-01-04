@@ -69,7 +69,7 @@ Prompts are defined in `utils/prompts.py` and are sampled per-example (some mixi
 
 ---
 
-## 🧪 Training
+## Training
 
 Basic training command:
 
@@ -124,17 +124,31 @@ This will:
 
 Below are example results from the `results/` folder — overlay visualizations where the predicted mask is composited in red on the original image.
 
-<p align="center">
-  <figure style="display:inline-block; margin:10px;">
-    <img src="results/crack_1_overlay.png" alt="Crack 1" width="320"/>
-    <figcaption><strong>Crack 1</strong></figcaption>
-  </figure>
-  <figure style="display:inline-block; margin:10px;">
-    <img src="results/crack_2_overlay.png" alt="Crack 2" width="320"/>
-    <figcaption><strong>Crack 2</strong></figcaption>
-  </figure>
-  <figure style="display:inline-block; margin:10px;">
-    <img src="results/drywall_join_overlay.png" alt="Drywall seam" width="320"/>
-    <figcaption><strong>Drywall seam</strong></figcaption>
-  </figure>
-</p>
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <img src="results/crack_1_overlay.png" alt="Crack 1" width="320"/>
+      <br>
+      <strong>Crack 1</strong>
+      <br>
+      <em>Prompt: "segment crack" • Overlay of predicted mask (red)</em>
+    </td>
+    <td align="center" width="33%">
+      <img src="results/crack_2_overlay.png" alt="Crack 2" width="320"/>
+      <br>
+      <strong>Crack 2</strong>
+      <br>
+      <em>Prompt: "segment crack" • Overlay of predicted mask (red)</em>
+    </td>
+    <td align="center" width="33%">
+      <img src="results/drywall_join_overlay.png" alt="Drywall seam" width="320"/>
+      <br>
+      <strong>Drywall seam</strong>
+      <br>
+      <em>Prompt: "segment taping area" • Overlay of predicted mask (red)</em>
+    </td>
+  </tr>
+</table>
+
+<br>
+<small>Note: overlay images are expected to be named with the `_overlay` suffix (e.g., `crack_1_overlay.png`). If your files use different names, rename them or update the paths above.</small>
