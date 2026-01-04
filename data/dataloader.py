@@ -74,12 +74,12 @@ class CracksAndDrywallDataloader(Dataset):
 
         # sample prompt
         if gt_class == "crack":
-            if random.random() < 0.5:
+            if random.random() < 0.85:
                 prompt = random.choice(self.prompts["crack"])
             else:
                 prompt = random.choice(self.prompts["taping"])
         else:
-            if random.random() < 0.5:
+            if random.random() < 0.85:
                 prompt = random.choice(self.prompts["taping"])
             else:
                 prompt = random.choice(self.prompts["crack"])
