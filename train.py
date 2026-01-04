@@ -137,7 +137,7 @@ def validate(model, dataloader):
 if __name__ == "__main__":
     
     # train model
-    for epoch in tqdm(range(args.num_epochs)):
+    for epoch in range(args.num_epochs):
         decoder.train()
         loss = train(decoder, train_loader, optimizer)
         print(f"Epoch {epoch+1}/{args.num_epochs} | Training Loss: {loss}")
