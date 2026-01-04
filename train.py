@@ -85,7 +85,7 @@ optimizer = torch.optim.AdamW(decoder.parameters(), lr=1e-4)
 
 def train(model, dataloader, optimizer):
     losses = []
-    for batch in dataloader:
+    for batch in tqdm(dataloader):
         images = batch['image'].to(args.device)
         masks = batch['mask'].to(args.device)
         prompts = batch['prompt']
