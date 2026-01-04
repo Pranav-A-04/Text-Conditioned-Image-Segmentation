@@ -32,8 +32,8 @@ train_dataset = CracksAndDrywallDataloader(
 )
 
 val_dataset = CracksAndDrywallDataloader(
-    cracks_path=os.path.join(args.cracks_path, "val"),
-    drywall_path=os.path.join(args.drywall_path, "val"),
+    cracks_path=os.path.join(args.cracks_path, "valid"),
+    drywall_path=os.path.join(args.drywall_path, "valid"),
     prompts=PROMPTS
 )
 
@@ -79,6 +79,8 @@ decoder = SegmentationDecoder(
     input_dim=512,
     output_dim=1
 ).to(args.device)
+
+decoder = torch.nn.DataParallel(decoder)
 
 # Define optimizer
 optimizer = torch.optim.AdamW(decoder.parameters(), lr=1e-4)
