@@ -67,6 +67,8 @@ with torch.no_grad():
     mask = (probs > 0.5).float()                # binary
 
 mask_np = mask[0, 0].cpu().numpy().astype("uint8") * 255
+print("Mask unique values:", np.unique(mask_np))
+print("Foreground pixel count:", (mask_np > 0).sum())
 mask_img = Image.fromarray(mask_np)
 
 # Resize mask back to original image size
