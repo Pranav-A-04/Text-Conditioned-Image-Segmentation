@@ -99,8 +99,13 @@ def train(model, dataloader, optimizer):
             assert vis_emb.ndim == 3, f"Expected [B, N, D], got {vis_emb.shape}"
 
             text_tokens = clip.tokenize(prompts).to(args.device)
-            text_emb = clip_model.encode_text(text_tokens)
-            text_emb = text_emb.float()
+            # Use CLIP token-level transformer outputs so attention has multiple keys
+            token_emb = clip_model.token_embedding(text_tokens).type(clip_model.dtype)  # [B, L, D]
+            x = token_emb + clip_model.positional_embedding.type(clip_model.dtype)
+            x = x.permute(1, 0, 2)  # [L, B, D]
+            x = clip_model.transformer(x)
+            x = x.permute(1, 0, 2)  # [B, L, D]
+            text_emb = clip_model.ln_final(x).float()
 
         optimizer.zero_grad()
         pred_masks = model(vis_emb, text_emb)
@@ -125,8 +130,12 @@ def validate(model, dataloader):
             vis_emb = vis_emb[:, 1:, :] # remove cls token
             assert vis_emb.ndim == 3, f"Expected [B, N, D], got {vis_emb.shape}"
             text_tokens = clip.tokenize(prompts).to(args.device)
-            text_emb = clip_model.encode_text(text_tokens)
-            text_emb = text_emb.float()
+            token_emb = clip_model.token_embedding(text_tokens).type(clip_model.dtype)  # [B, L, D]
+            x = token_emb + clip_model.positional_embedding.type(clip_model.dtype)
+            x = x.permute(1, 0, 2)
+            x = clip_model.transformer(x)
+            x = x.permute(1, 0, 2)
+            text_emb = clip_model.ln_final(x).float()
 
             pred_masks = model(vis_emb, text_emb)
 
