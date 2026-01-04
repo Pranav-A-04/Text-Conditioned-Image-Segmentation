@@ -65,7 +65,7 @@ with torch.no_grad():
     logits = decoder(vis_tokens, text_emb)      # [1,1,H,W]
     probs = torch.sigmoid(logits)
     print("Prob min/max:", probs.min().item(), probs.max().item())
-    mask = (probs > 0.08).float()                # binary
+    mask = (probs > 0.1).float()                # binary
 
 mask_np = mask[0, 0].cpu().numpy().astype("uint8") * 255
 print("Mask unique values:", np.unique(mask_np))
