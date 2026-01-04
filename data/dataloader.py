@@ -58,6 +58,8 @@ class CracksAndDrywallDataloader(Dataset):
                 'mask': mask,
                 'prompt': prompt
             })
+        
+        return dataset
     
     def __len__(self):
         return len(self.dataset)
