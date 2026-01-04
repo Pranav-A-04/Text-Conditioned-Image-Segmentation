@@ -105,7 +105,7 @@ def train(model, dataloader, optimizer):
         optimizer.zero_grad()
         pred_masks = model(vis_emb, text_emb)
 
-        loss = model.get_loss(pred_masks, masks)
+        loss = model.module.get_loss(pred_masks, masks)
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
@@ -130,7 +130,7 @@ def validate(model, dataloader):
 
             pred_masks = model(vis_emb, text_emb)
 
-            loss = model.get_loss(pred_masks, masks)
+            loss = model.module.get_loss(pred_masks, masks)
             val_losses.append(loss.item())
     avg_loss = np.mean(val_losses)
     return avg_loss
