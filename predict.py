@@ -44,7 +44,17 @@ decoder = SegmentationDecoder(
     input_dim=512,
     output_dim=1
 )
-decoder.load_state_dict(torch.load(args.ckpt, map_location=device))
+state_dict = torch.load(args.ckpt, map_location=device)
+
+# Strip "module." prefix if present
+new_state_dict = {}
+for k, v in state_dict.items():
+    if k.startswith("module."):
+        new_state_dict[k[len("module."):]] = v
+    else:
+        new_state_dict[k] = v
+
+decoder.load_state_dict(new_state_dict)
 decoder.eval().to(device)
 
 orig_image = Image.open(args.image_path).convert("RGB")
