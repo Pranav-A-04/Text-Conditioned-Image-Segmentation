@@ -18,19 +18,21 @@ parser.add_argument('--device', type=str, default='cuda', help='Device to use fo
 parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
 parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate for optimizer')
 parser.add_argument('--save_interval', type=int, default=10, help='Interval (in epochs) to save model checkpoints')
+parser.add_argument('--cracks_path', type=str, help='Path to cracks dataset')
+parser.add_argument('--drywall_path', type=str, help='Path to drywall dataset')
 args = parser.parse_args()
 
 torch.manual_seed(args.seed)
 
 train_dataset = CracksAndDrywallDataloader(
-    cracks_path="/content/cracks-2/train",
-    drywall_path="/content/Drywall-Join-Detect-3/train",
+    cracks_path=os.path.join(args.cracks_path, "train"),
+    drywall_path=os.path.join(args.drywall_path, "train"),
     prompts=PROMPTS
 )
 
 val_dataset = CracksAndDrywallDataloader(
-    cracks_path="/content/cracks-2/val",
-    drywall_path="/content/Drywall-Join-Detect-3/val",
+    cracks_path=os.path.join(args.cracks_path, "val"),
+    drywall_path=os.path.join(args.drywall_path, "val"),
     prompts=PROMPTS
 )
 
