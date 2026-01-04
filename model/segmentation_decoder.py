@@ -7,32 +7,37 @@ class SegmentationDecoder(nn.Module):
         super().__init__()
         self.vis_proj_layer = nn.Linear(vis_token_dim, input_dim)
         self.text_proj_layer = nn.Linear(text_token_dim, input_dim)
-        self.cross_attention = nn.MultiheadAttention(embed_dim=input_dim, num_heads=8)
+        self.cross_attention = nn.MultiheadAttention(
+            embed_dim=input_dim, 
+            num_heads=8,
+            batch_first=True
+        )
+        
         self.init_conv = nn.Conv2d(input_dim, hidden_dim[0], kernel_size=3, padding=1)
+        
         self.decoder = nn.ModuleList([
             nn.Sequential(
-                nn.ConvTranspose2d(input_dim if i == 0 else hidden_dim, hidden_dim, kernel_size=4, stride=2, padding=1),
-                nn.BatchNorm2d(hidden_dim),
+                nn.ConvTranspose2d(hidden_dim[i], hidden_dim[i+1], kernel_size=4, stride=2, padding=1),
+                nn.BatchNorm2d(hidden_dim[i+1]),
                 nn.ReLU()
-            ) for i in range(len(hidden_dim))
+            ) for i in range(len(hidden_dim)-1)
         ])
         
         self.output_deconv = nn.ConvTranspose2d(
             hidden_dim[-1], output_dim, kernel_size=4, stride=2, padding=1
         )
         
-        self.activation = nn.Sigmoid()
+        self.bce_loss = nn.BCEWithLogitsLoss()
     
     def get_loss(self, predicted_mask, ground_truth_mask):
-        BCELoss = nn.BCELoss()
-        bce_loss = BCELoss(predicted_mask, ground_truth_mask)
-        dice_loss = dice_loss(predicted_mask, ground_truth_mask)
+        bce_loss = self.bce_loss(predicted_mask, ground_truth_mask)
+        dice = dice_loss(predicted_mask, ground_truth_mask)
         
-        return bce_loss + dice_loss
+        return bce_loss + dice
     
     def forward(self, vis_tokens, text_tokens):
         # broadcast text tokens
-        text_tokens = text_tokens.unsqueeze(1).repeat(1, vis_tokens.size(1), 1)
+        text_tokens = text_tokens.unsqueeze(1)
         
         # Project visual and text tokens
         vis_tokens = self.vis_proj_layer(vis_tokens)
@@ -40,6 +45,11 @@ class SegmentationDecoder(nn.Module):
         
         # Apply cross attention
         attended_tokens, _ = self.cross_attention(vis_tokens, text_tokens, text_tokens)
+        
+        # Reshape attended tokens to feature map
+        B, N, D = attended_tokens.shape
+        H = W = int(N ** 0.5)
+        attended_tokens = attended_tokens.permute(0, 2, 1).contiguous().view(B, D, H, W)
         
         # Initialize with the first convolution
         x = self.init_conv(attended_tokens)
@@ -49,5 +59,4 @@ class SegmentationDecoder(nn.Module):
             x = layer(x)
             
         # Final deconvolution and activation
-        x = self.output_deconv(x)
-        return self.activation(x)
+        return self.output_deconv(x)
