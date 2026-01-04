@@ -149,6 +149,3 @@ Below are example results from the `results/` folder — overlay visualizations 
     </td>
   </tr>
 </table>
-
-<br>
-<small>Note: overlay images are expected to be named with the `_overlay` suffix (e.g., `crack_1_overlay.png`). If your files use different names, rename them or update the paths above.</small>
