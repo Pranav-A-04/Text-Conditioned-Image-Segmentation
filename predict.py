@@ -28,23 +28,57 @@ image_transform = transforms.Compose([
     )
 ])
 
-print("Loading ViT...")
-vit = timm.create_model("vit_base_patch16_224", pretrained=True)
-vit.reset_classifier(0)
-vit.eval().to(device)
+# CLIP image encoder (ViT-B/16)
+clip_img_model, preprocess = clip.load("ViT-B/16", device=args.device)
+clip_img_model = clip_img_model.float()
+clip_img_model.eval()
 
-print("Loading CLIP...")
-clip_model, _ = clip.load("ViT-B/32", device=device)
-clip_model.eval()
+# CLIP text encoder (ViT-B/32)
+clip_txt_model, _ = clip.load("ViT-B/32", device=args.device)
+clip_txt_model = clip_txt_model.float()
+clip_txt_model.eval()
 
-print("Loading decoder checkpoint...")
 decoder = SegmentationDecoder(
-    vis_token_dim=768,
-    text_token_dim=512,
-    input_dim=512,
-    output_dim=1
-)
+    vis_dim=768,
+    text_dim=512,
+    output_dim=1,
+).to(args.device)
 state_dict = torch.load(args.ckpt, map_location=device)
+
+def extract_clip_image_features(images):
+    with torch.no_grad():
+        x = clip_img_model.visual.conv1(images)          # [B, C, H/16, W/16]
+        x = x.reshape(x.shape[0], x.shape[1], -1)        # [B, C, N]
+        x = x.permute(0, 2, 1)                            # [B, N, C]
+
+        cls_token = clip_img_model.visual.class_embedding
+        cls_token = cls_token.to(x.dtype)
+        cls_token = cls_token.expand(x.shape[0], 1, -1)
+
+        x = torch.cat([cls_token, x], dim=1)              # [B, N+1, C]
+        x = x + clip_img_model.visual.positional_embedding
+        x = clip_img_model.visual.ln_pre(x)
+
+        x = x.permute(1, 0, 2)                             # [N+1, B, C]
+        x = clip_img_model.visual.transformer(x)
+        x = x.permute(1, 0, 2)                             # [B, N+1, C]
+
+        x = clip_img_model.visual.ln_post(x)
+
+        patch_tokens = x[:, 1:, :]                         # remove CLS
+        B, N, C = patch_tokens.shape
+        H = W = int(N ** 0.5)
+        patch_tokens = patch_tokens.permute(0, 2, 1).contiguous()
+        patch_tokens = patch_tokens.view(B, C, H, W)      # [B, C, H, W]
+
+    return patch_tokens
+
+def extract_clip_text_embedding(prompts):
+    with torch.no_grad():
+        text_tokens = clip.tokenize(prompts).to(args.device)
+        text_emb = clip_txt_model.encode_text(text_tokens)
+        text_emb = text_emb.float()   # important for FiLM
+    return text_emb
 
 # Strip "module." prefix if present
 new_state_dict = {}
@@ -62,23 +96,11 @@ orig_w, orig_h = orig_image.size
 
 image = image_transform(orig_image).unsqueeze(0).to(device)  # [1,3,224,224]
 
+image_feats = extract_clip_image_features(image)  # [1,768,H,W]
+text_emb = extract_clip_text_embedding([args.prompt])  # [1,512]
 
 with torch.no_grad():
-    text_tokens = clip.tokenize([args.prompt]).to(args.device)
-    # Use CLIP token-level transformer outputs so attention has multiple keys
-    token_emb = clip_model.token_embedding(text_tokens).type(clip_model.dtype)  # [B, L, D]
-    x = token_emb + clip_model.positional_embedding.type(clip_model.dtype)
-    x = x.permute(1, 0, 2)  # [L, B, D]
-    x = clip_model.transformer(x)
-    x = x.permute(1, 0, 2)  # [B, L, D]
-    text_emb = clip_model.ln_final(x).float()
-
-with torch.no_grad():
-    vis_tokens = vit.forward_features(image)   # [1,197,768]
-    vis_tokens = vis_tokens[:, 1:, :]           # drop CLS → [1,196,768]
-
-with torch.no_grad():
-    logits = decoder(vis_tokens, text_emb)      # [1,1,H,W]
+    logits = decoder(image_feats, text_emb)      # [1,1,H,W]
     probs = torch.sigmoid(logits)
     print("Prob min/max:", probs.min().item(), probs.max().item())
     mask = (probs > 0.5).float()                # binary
