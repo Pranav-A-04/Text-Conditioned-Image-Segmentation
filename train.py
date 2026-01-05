@@ -51,98 +51,104 @@ val_loader = DataLoader(
     num_workers=args.num_workers,
 )
 
-# Fetch pre-trained ViT and CLIP models
-vit = timm.create_model(
-    'vit_base_patch16_224',
-    pretrained=True,
-)
-# Remove classification head
-vit.reset_classifier(0)
-vit = vit.to(args.device)
-vit.eval()
+# CLIP image encoder (ViT-B/16)
+clip_img_model, preprocess = clip.load("ViT-B/16", device=args.device)
+clip_img_model.eval()
 
-# Load CLIP model
-clip_model, preprocess = clip.load('ViT-B/32', device=args.device)
-clip_model.eval()
+# CLIP text encoder (ViT-B/32)
+clip_txt_model, _ = clip.load("ViT-B/32", device=args.device)
+clip_txt_model.eval()
 
-# Freeze pre-trained model parameters
-for p in vit.parameters():
+for p in clip_img_model.parameters():
     p.requires_grad = False
 
-for p in clip_model.parameters():
+for p in clip_txt_model.parameters():
     p.requires_grad = False
 
-# Initialize segmentation decoder
 decoder = SegmentationDecoder(
-    vis_token_dim=768,
-    text_token_dim=512,
-    input_dim=512,
-    output_dim=1
+    vis_dim=768,
+    text_dim=512,
+    output_dim=1,
 ).to(args.device)
 
 decoder = torch.nn.DataParallel(decoder)
+optimizer = torch.optim.AdamW(decoder.parameters(), lr=args.learning_rate)
 
-# Define optimizer
-optimizer = torch.optim.AdamW(decoder.parameters(), lr=1e-4)
+def extract_clip_image_features(images):
+    with torch.no_grad():
+        x = clip_img_model.visual.conv1(images)          # [B, C, H/16, W/16]
+        x = x.reshape(x.shape[0], x.shape[1], -1)        # [B, C, N]
+        x = x.permute(0, 2, 1)                            # [B, N, C]
+
+        cls_token = clip_img_model.visual.class_embedding
+        cls_token = cls_token.to(x.dtype)
+        cls_token = cls_token.expand(x.shape[0], 1, -1)
+
+        x = torch.cat([cls_token, x], dim=1)              # [B, N+1, C]
+        x = x + clip_img_model.visual.positional_embedding
+        x = clip_img_model.visual.ln_pre(x)
+
+        x = x.permute(1, 0, 2)                             # [N+1, B, C]
+        x = clip_img_model.visual.transformer(x)
+        x = x.permute(1, 0, 2)                             # [B, N+1, C]
+
+        x = clip_img_model.visual.ln_post(x)
+
+        patch_tokens = x[:, 1:, :]                         # remove CLS
+        B, N, C = patch_tokens.shape
+        H = W = int(N ** 0.5)
+        patch_tokens = patch_tokens.permute(0, 2, 1).contiguous()
+        patch_tokens = patch_tokens.view(B, C, H, W)      # [B, C, H, W]
+
+    return patch_tokens
+
+def extract_clip_text_embedding(prompts):
+    with torch.no_grad():
+        text_tokens = clip.tokenize(prompts).to(args.device)
+        text_emb = clip_txt_model.encode_text(text_tokens)
+        text_emb = text_emb.float()   # important for FiLM
+    return text_emb
 
 def train(model, dataloader, optimizer):
     losses = []
+
     for batch in tqdm(dataloader):
-        images = batch['image'].to(args.device)
-        masks = batch['mask'].to(args.device)
-        prompts = batch['prompt']
+        images = batch["image"].to(args.device)
+        masks = batch["mask"].to(args.device)
+        prompts = batch["prompt"]
 
-        # Obtain visual and text embeddings from pre-trained models
-        with torch.no_grad():
-            vis_emb = vit.forward_features(images)
-            vis_emb = vis_emb[:, 1:, :]  # Remove CLS token
-            assert vis_emb.ndim == 3, f"Expected [B, N, D], got {vis_emb.shape}"
-
-            text_tokens = clip.tokenize(prompts).to(args.device)
-            # Use CLIP token-level transformer outputs so attention has multiple keys
-            token_emb = clip_model.token_embedding(text_tokens).type(clip_model.dtype)  # [B, L, D]
-            x = token_emb + clip_model.positional_embedding.type(clip_model.dtype)
-            x = x.permute(1, 0, 2)  # [L, B, D]
-            x = clip_model.transformer(x)
-            x = x.permute(1, 0, 2)  # [B, L, D]
-            text_emb = clip_model.ln_final(x).float()
+        image_feats = extract_clip_image_features(images)
+        text_emb = extract_clip_text_embedding(prompts)
 
         optimizer.zero_grad()
-        pred_masks = model(vis_emb, text_emb)
+        pred_masks = model(image_feats, text_emb)
 
         loss = model.module.get_loss(pred_masks, masks)
         loss.backward()
         optimizer.step()
+
         losses.append(loss.item())
-    avg_loss = np.mean(losses)
-    return avg_loss
+
+    return np.mean(losses)
     
 
 def validate(model, dataloader):
-    val_losses = []
+    losses = []
+
     with torch.no_grad():
         for batch in dataloader:
-            images = batch['image'].to(args.device)
-            masks = batch['mask'].to(args.device)
-            prompts = batch['prompt']
+            images = batch["image"].to(args.device)
+            masks = batch["mask"].to(args.device)
+            prompts = batch["prompt"]
 
-            vis_emb = vit.forward_features(images)
-            vis_emb = vis_emb[:, 1:, :] # remove cls token
-            assert vis_emb.ndim == 3, f"Expected [B, N, D], got {vis_emb.shape}"
-            text_tokens = clip.tokenize(prompts).to(args.device)
-            token_emb = clip_model.token_embedding(text_tokens).type(clip_model.dtype)  # [B, L, D]
-            x = token_emb + clip_model.positional_embedding.type(clip_model.dtype)
-            x = x.permute(1, 0, 2)
-            x = clip_model.transformer(x)
-            x = x.permute(1, 0, 2)
-            text_emb = clip_model.ln_final(x).float()
+            image_feats = extract_clip_image_features(images)
+            text_emb = extract_clip_text_embedding(prompts)
 
-            pred_masks = model(vis_emb, text_emb)
-
+            pred_masks = model(image_feats, text_emb)
             loss = model.module.get_loss(pred_masks, masks)
-            val_losses.append(loss.item())
-    avg_loss = np.mean(val_losses)
-    return avg_loss
+            losses.append(loss.item())
+
+    return np.mean(losses)
 
 
 if __name__ == "__main__":
