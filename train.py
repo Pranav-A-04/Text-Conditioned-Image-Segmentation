@@ -82,12 +82,12 @@ def extract_clip_image_features(images):
         x = x.reshape(x.shape[0], x.shape[1], -1)        # [B, C, N]
         x = x.permute(0, 2, 1)                            # [B, N, C]
 
-        cls_token = clip_img_model.visual.class_embedding
+        cls_token = clip_img_model.visual.class_embedding.to(x.dtype)
         cls_token = cls_token.to(x.dtype)
         cls_token = cls_token.expand(x.shape[0], 1, -1)
 
         x = torch.cat([cls_token, x], dim=1)
-        x = x + clip_img_model.visual.positional_embedding
+        x = x + clip_img_model.visual.positional_embedding.to(x.dtype)
         x = clip_img_model.visual.ln_pre(x)
 
         x = x.permute(1, 0, 2)
