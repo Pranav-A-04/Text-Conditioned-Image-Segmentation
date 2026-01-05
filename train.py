@@ -76,6 +76,8 @@ optimizer = torch.optim.AdamW(decoder.parameters(), lr=args.learning_rate)
 
 def extract_clip_image_features(images):
     with torch.no_grad():
+        images = images.to(dtype=clip_img_model.dtype)
+
         x = clip_img_model.visual.conv1(images)          # [B, C, H/16, W/16]
         x = x.reshape(x.shape[0], x.shape[1], -1)        # [B, C, N]
         x = x.permute(0, 2, 1)                            # [B, N, C]
@@ -84,21 +86,22 @@ def extract_clip_image_features(images):
         cls_token = cls_token.to(x.dtype)
         cls_token = cls_token.expand(x.shape[0], 1, -1)
 
-        x = torch.cat([cls_token, x], dim=1)              # [B, N+1, C]
+        x = torch.cat([cls_token, x], dim=1)
         x = x + clip_img_model.visual.positional_embedding
         x = clip_img_model.visual.ln_pre(x)
 
-        x = x.permute(1, 0, 2)                             # [N+1, B, C]
+        x = x.permute(1, 0, 2)
         x = clip_img_model.visual.transformer(x)
-        x = x.permute(1, 0, 2)                             # [B, N+1, C]
+        x = x.permute(1, 0, 2)
 
         x = clip_img_model.visual.ln_post(x)
 
-        patch_tokens = x[:, 1:, :]                         # remove CLS
+        patch_tokens = x[:, 1:, :]
         B, N, C = patch_tokens.shape
         H = W = int(N ** 0.5)
+
         patch_tokens = patch_tokens.permute(0, 2, 1).contiguous()
-        patch_tokens = patch_tokens.view(B, C, H, W)      # [B, C, H, W]
+        patch_tokens = patch_tokens.view(B, C, H, W)
 
     return patch_tokens
 
