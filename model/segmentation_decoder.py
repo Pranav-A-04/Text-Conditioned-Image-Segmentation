@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from torch.nn import functional as F
 from utils.misc import dice_loss
 from utils.film import FiLM
 
@@ -11,12 +10,9 @@ class SegmentationDecoder(nn.Module):
         text_dim: int,       # text embedding dim (e.g. 512)
         hidden_dims=(256, 128, 64),
         output_dim=1,
-        img_size = 224
     ):
         super().__init__()
 
-        self.image_size = img_size
-        
         # Project visual features
         self.vis_proj = nn.Sequential(
             nn.Conv2d(vis_dim, hidden_dims[0], kernel_size=1),
@@ -65,12 +61,6 @@ class SegmentationDecoder(nn.Module):
         x = self.film3(x, text_emb)
 
         mask = self.mask_head(x)
-        mask = F.interpolate(
-                mask,
-                size=(self.image_size, self.image_size),
-                mode="bilinear",
-                align_corners=False,
-            )
         return mask
 
     def get_loss(self, pred_mask, gt_mask):
