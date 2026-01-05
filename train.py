@@ -146,7 +146,7 @@ def validate(model, dataloader):
             pred_masks = model(vis_emb, text_emb)
 
             # negative-prompt supervision: if prompt doesn't match, target mask is empty
-            is_positive = torch.tensor(batch['is_positive'], dtype=torch.bool, device=args.device)
+            is_positive = batch['is_positive'].to(device=args.device, dtype=torch.bool)
             target_masks = masks.clone()
             if not is_positive.all():
                 target_masks[~is_positive] = 0.0
