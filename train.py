@@ -111,7 +111,7 @@ def train(model, dataloader, optimizer):
         pred_masks = model(vis_emb, text_emb)
 
         # If the sampled prompt doesn't match the image class, supervise with an empty (zero) mask
-        is_positive = torch.tensor(batch['is_positive'], dtype=torch.bool, device=args.device)
+        is_positive = batch['is_positive'].to(device=args.device, dtype=torch.bool)
         target_masks = masks.clone()
         if not is_positive.all():
             target_masks[~is_positive] = 0.0
