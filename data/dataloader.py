@@ -84,8 +84,11 @@ class CracksAndDrywallDataloader(Dataset):
             else:
                 prompt = random.choice(self.prompts["crack"])
 
+        is_positive = (prompt in self.prompts[gt_class])
         return {
             "image": image,   # [3,224,224]
             "mask": mask,     # [1,224,224]
-            "prompt": prompt
+            "prompt": prompt,
+            "is_positive": is_positive,
+            "gt_class": gt_class
         }

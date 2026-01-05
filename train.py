@@ -110,7 +110,13 @@ def train(model, dataloader, optimizer):
         optimizer.zero_grad()
         pred_masks = model(vis_emb, text_emb)
 
-        loss = model.module.get_loss(pred_masks, masks)
+        # If the sampled prompt doesn't match the image class, supervise with an empty (zero) mask
+        is_positive = torch.tensor(batch['is_positive'], dtype=torch.bool, device=args.device)
+        target_masks = masks.clone()
+        if not is_positive.all():
+            target_masks[~is_positive] = 0.0
+
+        loss = model.module.get_loss(pred_masks, target_masks)
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
@@ -139,7 +145,13 @@ def validate(model, dataloader):
 
             pred_masks = model(vis_emb, text_emb)
 
-            loss = model.module.get_loss(pred_masks, masks)
+            # negative-prompt supervision: if prompt doesn't match, target mask is empty
+            is_positive = torch.tensor(batch['is_positive'], dtype=torch.bool, device=args.device)
+            target_masks = masks.clone()
+            if not is_positive.all():
+                target_masks[~is_positive] = 0.0
+
+            loss = model.module.get_loss(pred_masks, target_masks)
             val_losses.append(loss.item())
     avg_loss = np.mean(val_losses)
     return avg_loss

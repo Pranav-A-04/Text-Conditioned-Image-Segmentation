@@ -60,13 +60,11 @@ class SegmentationDecoder(nn.Module):
         vis_tokens = self.vis_proj_layer(vis_tokens)  # [B, N, D]
         text_tokens = self.text_proj_layer(text_tokens)  # [B, L, D]
 
-        # ---- Pre-norm cross-attention sublayer ----
         q = self.norm1(vis_tokens)
         attn_out, attn_weights = self.cross_attention(q, text_tokens, text_tokens, need_weights=True)
         # Residual for attention sublayer
         x = vis_tokens + attn_out  # [B, N, D]
 
-        # ---- MLP sublayer (pre-norm) ----
         x2 = self.mlp(self.norm2(x))
         # Residual for MLP sublayer
         x = x + x2  # [B, N, D]
