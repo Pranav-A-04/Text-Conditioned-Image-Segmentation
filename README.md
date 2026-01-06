@@ -122,7 +122,7 @@ This will:
 
 ## Results
 
-Below are example results from the `results/` folder — each row shows **original image**, **correct prompt overlay**, and **negative prompt overlay** (left → right). For the join example, the `join_with_crack_prompt.png` image is used as both the original and the negative overlay as requested.
+Below are example results from the `results/` folder — each row shows **original image**, **correct prompt overlay**, and **negative prompt overlay** (left → right).
 
 <table>
   <tr>
