@@ -122,30 +122,63 @@ This will:
 
 ## Results
 
-Below are example results from the `results/` folder — overlay visualizations where the predicted mask is composited in red on the original image.
+Below are example results from the `results/` folder — each row shows **original image**, **correct prompt overlay**, and **negative prompt overlay** (left → right). For the join example, the `join_with_crack_prompt.png` image is used as both the original and the negative overlay as requested.
 
 <table>
   <tr>
-    <td align="center" width="33%">
-      <img src="results/crack_1_overlay.png" alt="Crack 1" width="320"/>
+    <th align="center">Original</th>
+    <th align="center">Correct prompt overlay</th>
+    <th align="center">Negative prompt overlay</th>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="results/crack_og.jpg" alt="Crack OG" width="320"/>
       <br>
-      <strong>Crack 1</strong>
-      <br>
-      <em>Prompt: "segment crack" • Overlay of predicted mask (red)</em>
+      <strong>Crack — Example 1 (Original)</strong>
     </td>
-    <td align="center" width="33%">
-      <img src="results/crack_2_overlay.png" alt="Crack 2" width="320"/>
+    <td align="center">
+      <img src="results/crack_with_crack_prompt.png" alt="Crack - correct prompt" width="320"/>
       <br>
-      <strong>Crack 2</strong>
-      <br>
-      <em>Prompt: "segment crack" • Overlay of predicted mask (red)</em>
+      <em>Prompt: "segment crack" (positive)</em>
     </td>
-    <td align="center" width="33%">
-      <img src="results/drywall_join_overlay.png" alt="Drywall seam" width="320"/>
+    <td align="center">
+      <img src="results/crack_with_join_prompt.png" alt="Crack - negative prompt" width="320"/>
       <br>
-      <strong>Drywall seam</strong>
+      <em>Prompt: "segment taping area" (negative)</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="results/og_crack_2.jpg" alt="Crack OG 2" width="320"/>
       <br>
-      <em>Prompt: "segment taping area" • Overlay of predicted mask (red)</em>
+      <strong>Crack — Example 2 (Original)</strong>
+    </td>
+    <td align="center">
+      <img src="results/crack_with_crack_prompt2.png" alt="Crack 2 - correct prompt" width="320"/>
+      <br>
+      <em>Prompt: "segment crack" (positive)</em>
+    </td>
+    <td align="center">
+      <img src="results/crack_with_join_prompt2.png" alt="Crack 2 - negative prompt" width="320"/>
+      <br>
+      <em>Prompt: "segment taping area" (negative)</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="results/join_with_crack_prompt.png" alt="Join OG" width="320"/>
+      <br>
+      <strong>Drywall seam — Example (Original)</strong>
+    </td>
+    <td align="center">
+      <img src="results/join_with_join_prompt.png" alt="Join - correct prompt" width="320"/>
+      <br>
+      <em>Prompt: "segment taping area" (positive)</em>
+    </td>
+    <td align="center">
+      <img src="results/join_with_crack_prompt.png" alt="Join - negative prompt (same as OG)" width="320"/>
+      <br>
+      <em>Prompt: "segment crack" (negative)</em>
     </td>
   </tr>
 </table>
