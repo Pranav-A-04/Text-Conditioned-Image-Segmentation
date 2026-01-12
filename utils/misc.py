@@ -11,3 +11,15 @@ def dice_loss(predicted_mask, ground_truth_mask, smooth=1e-6):
     dice = torch.clamp(dice_score, 0.0, 1.0)
     dice = torch.nan_to_num(dice, nan=1.0)
     return 1 - dice.mean()
+
+def compute_iou_and_dice(pred, target, eps=1e-6):
+    """
+    pred, target: [B, H, W] binary tensors {0,1}
+    """
+    intersection = (pred * target).sum(dim=(1, 2))
+    union = pred.sum(dim=(1, 2)) + target.sum(dim=(1, 2)) - intersection
+
+    iou = (intersection + eps) / (union + eps)
+    dice = (2 * intersection + eps) / (pred.sum(dim=(1, 2)) + target.sum(dim=(1, 2)) + eps)
+
+    return iou, dice

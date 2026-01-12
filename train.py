@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 from data.dataloader import CracksAndDrywallDataloader
 from model.segmentation_decoder import SegmentationDecoder
+from utils.misc import compute_iou_and_dice
 from utils.prompts import PROMPTS
 import argparse
 
@@ -126,6 +127,8 @@ def train(model, dataloader, optimizer):
 
 def validate(model, dataloader):
     val_losses = []
+    iou_scores = {p: [] for p in PROMPTS.keys()}
+    dice_scores = {p: [] for p in PROMPTS.keys()}
     with torch.no_grad():
         for batch in dataloader:
             images = batch['image'].to(args.device)
@@ -153,8 +156,43 @@ def validate(model, dataloader):
 
             loss = model.module.get_loss(pred_masks, target_masks)
             val_losses.append(loss.item())
+            
+            if is_positive.any():
+                # compute metrics on only positive samples
+                pred_probs = torch.sigmoid(pred_masks)
+                pred_bin = (pred_probs > 0.5).float() # shape [B, 1, H, W]
+                pred_bin = pred_bin.squeeze(1)  # [B, H, W]
+                gt_bin = masks.squeeze(1)      # [B, H, W]
+                
+                pred_bin = pred_bin[is_positive]
+                gt_bin = gt_bin[is_positive]
+                iou, dice = compute_iou_and_dice(
+                    pred_bin, gt_bin
+                )
+                
+                for p, i, d in zip(
+                    np.array(prompts)[is_positive.cpu().numpy()],
+                    iou.cpu().tolist(),
+                    dice.cpu().tolist()
+                ):
+                    iou_scores[p].append(i)
+                    dice_scores[p].append(d)
+                
     avg_loss = np.mean(val_losses)
-    return avg_loss
+    mIoU = {p: np.mean(v) if len(v) > 0 else 0.0 for p, v in iou_scores.items()}
+    mDice = {p: np.mean(v) if len(v) > 0 else 0.0 for p, v in dice_scores.items()}
+    
+    # mean metrics across all classes
+    overall_mIoU = np.mean(list(mIoU.values()))
+    overall_mDice = np.mean(list(mDice.values()))
+    
+    metrics = {
+        'mIoU': mIoU,
+        'mDice': mDice,
+        'overall_mIoU': overall_mIoU,
+        'overall_mDice': overall_mDice
+    }
+    return avg_loss, metrics
 
 
 if __name__ == "__main__":
@@ -168,7 +206,8 @@ if __name__ == "__main__":
         # validate model and save ckpt
         if epoch % int(args.save_interval) == 0:
             decoder.eval()
-            val_loss = validate(decoder, val_loader)
-            print(f"Epoch {epoch+1}/{args.num_epochs} | Validation Loss: {val_loss}")
+            val_loss, metrics = validate(decoder, val_loader)
+            print(f"Epoch {epoch+1}/{args.num_epochs} | Validation Loss: {val_loss} | mIoU: {metrics['mIoU']} | mDice: {metrics['mDice']}")
             os.makedirs("checkpoints", exist_ok=True)
-            torch.save(decoder.state_dict(), os.path.join("checkpoints", f"segmentation_decoder_epoch_{epoch+1}.pth"))    
+            torch.save(decoder.state_dict(), os.path.join("checkpoints", f"segmentation_decoder_epoch_{epoch+1}.pth"))
+                
