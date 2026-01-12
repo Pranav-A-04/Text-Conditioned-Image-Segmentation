@@ -52,6 +52,12 @@ val_loader = DataLoader(
     num_workers=args.num_workers,
 )
 
+# prompt classes
+PROMPT_TO_CLASS = {}
+for cls, plist in PROMPTS.items():
+    for p in plist:
+        PROMPT_TO_CLASS[p] = cls
+
 # Fetch pre-trained ViT and CLIP models
 vit = timm.create_model(
     'vit_base_patch16_224',
@@ -175,9 +181,10 @@ def validate(model, dataloader):
                     iou.cpu().tolist(),
                     dice.cpu().tolist()
                 ):
-                    iou_scores[p].append(i)
-                    dice_scores[p].append(d)
-                
+                    cls = PROMPT_TO_CLASS[p]
+                    iou_scores[cls].append(i)
+                    dice_scores[cls].append(d)
+
     avg_loss = np.mean(val_losses)
     mIoU = {p: np.mean(v) if len(v) > 0 else 0.0 for p, v in iou_scores.items()}
     mDice = {p: np.mean(v) if len(v) > 0 else 0.0 for p, v in dice_scores.items()}
@@ -204,7 +211,7 @@ if __name__ == "__main__":
         print(f"Epoch {epoch+1}/{args.num_epochs} | Training Loss: {loss}")
         
         # validate model and save ckpt
-        if epoch % int(args.save_interval) == 0:
+        if (epoch + 1) % int(args.save_interval) == 0:
             decoder.eval()
             val_loss, metrics = validate(decoder, val_loader)
             print(f"Epoch {epoch+1}/{args.num_epochs} | Validation Loss: {val_loss} | mIoU: {metrics['mIoU']} | mDice: {metrics['mDice']}")
